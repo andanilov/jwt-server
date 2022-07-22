@@ -27,7 +27,6 @@ app.use(errorMiddleware); // Error middleware, should be last middleware
 
 const start = () => {
   try {
-
     app.listen(PORT, () => console.log(`Server was started at port ${PORT}!`));
   } catch(e) {
     console.error(e);

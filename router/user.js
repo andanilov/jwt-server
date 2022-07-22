@@ -3,7 +3,6 @@ const userController = require('../controllers/user-controller');
 const router = new Router();
 const { body } = require('express-validator'); // Body request validate
 const authMiddleware = require('../middlewares/auth-middleware');
-// const model = require('../models');
 
 // -- Create DB
 // router.get('/create-db', model.create);

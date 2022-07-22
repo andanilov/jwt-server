@@ -7,7 +7,7 @@ class UserModel {
         email VARCHAR(128) primary key,
         password VARCHAR(64) NOT NULL,
         name VARCHAR(64),
-        isActivated BOOLEAN DEFAULT false,
+        isactivated BOOLEAN DEFAULT false,
         activationLink VARCHAR(255)
       );`);      
       console.log('Таблица users создана!');

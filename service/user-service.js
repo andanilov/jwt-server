@@ -51,7 +51,7 @@ class UserService {
     }
 
     // 2. Update user col isActivated
-    await db.query(`UPDATE users SET isActivated=true WHERE email=$1`, [user.rows[0].email]);
+    await db.query(`UPDATE users SET isactivated=true WHERE email=$1`, [user.rows[0].email]);
   }
 
   async login(email, password) {
