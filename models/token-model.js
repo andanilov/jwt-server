@@ -1,7 +1,7 @@
 const db = require('../db');
 
 class TokenModel {
-  async createModel () { console.log('Hi');
+  async createModel () { 
     try {
       await db.query(`
           CREATE TABLE IF NOT EXISTS token (
@@ -9,10 +9,11 @@ class TokenModel {
             email VARCHAR(128) NOT NULL,
             token TEXT
           );`);
+      console.log('Таблица token создана!');
     } catch(e) {
       console.log(e.message);
     }
   }
 }
 
-module.exports = TokenModel;
+module.exports = new TokenModel();
