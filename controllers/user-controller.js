@@ -23,7 +23,7 @@ class UserController {
       res.cookie('refreshToken', userData.refreshToken, {
         maxAge: getPeriodByString('30d'),
         httpOnly: true, // close browser access to this cookie!
-        // secure: true, // for https://
+        // secure: false, // secure: true, // for https://
        });
 
       // 4. get user data
@@ -32,6 +32,38 @@ class UserController {
       // 5. Send response
       return res.json(user);
 
+    } catch (e) {
+      next(e); // go to middleware (error)
+    }
+  }
+
+  // --- REMEMBER
+  async remember(req, res, next) {
+    try {
+      // 0. Check request body rows
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return next(ApiError.BadRequest('Ошибка при валидации', errors));
+      }
+
+      // 1. Get user info from front
+      const { email } = req.body;
+     
+      // 2. User registration by service
+      const userData = await userService.remember(email, req.socket.remoteAddress);
+
+      // 3. Send response
+      return res.json({ success: 'На ваш e-mail отправлены инструкции по смене пароля!' });
+    } catch (e) {
+      next(e); // go to middleware (error)
+    }
+  }
+
+  // --- REMEMBER
+  async reset(req, res, next) {
+    try {
+      await userService.reset(req.params.link);
+      return res.redirect(process.env.CLIENT_URL);
     } catch (e) {
       next(e); // go to middleware (error)
     }
@@ -54,8 +86,10 @@ class UserController {
 
       // 3. Set refresh token to cookie
       res.cookie('refreshToken', userData.refreshToken, {
-        maxAge: getPeriodByString('30d'),
+        samSite: 'none',
+        maxAge: getPeriodByString(process.env.JWT_REFRESH_KEY),
         httpOnly: true,
+        secure: false, // secure: true, // for https://
       });
 
       // 5. Send response
@@ -106,6 +140,7 @@ class UserController {
 
       // 3. Set refresh token to cookie
       res.cookie('refreshToken', userData.refreshToken, {
+        samSite: 'none',
         maxAge: getPeriodByString('30d'),
         httpOnly: true,
       })

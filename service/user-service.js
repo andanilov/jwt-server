@@ -1,10 +1,12 @@
 const db = require('../db');
 const bcrypt = require('bcrypt');
 const uuid = require('uuid');
+const generatePassword = require('password-generator');
 const emailService = require('./mail-service');
 const tokenService = require('./token-service');
 const UserDto = require('../dtos/user-dto');
 const ApiError = require('../exceptions/api-error');
+const getPeriodByString = require('../utils/getPeriodByString');
 // next function call next middleware in chain
 
 class UserService {
@@ -25,9 +27,10 @@ class UserService {
     // 4. Add user to DB
     const user = await (async function() {
       try {
-        const newUser = await db.query(`INSERT INTO users VALUES ($1, $2, $3, $4, $5) RETURNING *`, [
-          email, hashPass, name, false, activationStr
-        ]);
+        const newUser = await db.query(`INSERT INTO users
+          (email, password, name, isactivated, created, activationlink)
+          VALUES ($1, $2, $3, $4, current_timestamp, $5) RETURNING *`,           
+          [email, hashPass, name, false, activationStr]);
         return newUser;
       } catch (e) {
         throw ApiError.BadRequest(`Не удалось добавить пользлователя ${email} : ${e.message}`);
@@ -42,6 +45,60 @@ class UserService {
     return tokensAndUser;   
   }
 
+  // --- REMEMBER
+  async remember(email, ip) {
+    // 1. If the email doesn't exists
+    const userExist = await db.query(`SELECT email FROM users WHERE email=$1`, [email]);
+    if (!userExist.rows.length) {
+      throw ApiError.BadRequest(`Пользователя с данным email ${email} не существует!`);
+    }
+
+    // 2. Generate random string to reset password
+    const resetStr = uuid.v4();
+
+    // 3. Set resetLInk and time to DB
+    const user = await (async function() {
+      try {
+        await db.query(`UPDATE users SET resetlink=$1, resetlinkcreated=current_timestamp WHERE email=$2`, [resetStr, email]);
+      } catch (e) {
+        throw ApiError.BadRequest(`Не удалось обновить данные пользователя ${email} : ${e.message}`);
+      }      
+    }());
+
+    // 4. Send new password to user by email
+    await emailService.sendResetPasswordLinkMail(email, `${process.env.API_URL}/api/user/reset/${resetStr}`, ip);
+  }
+
+  // --- RESET PASSWORD
+  async reset(resetLink) {    
+    // 1. Check resetLink exists
+    const user = await db.query(`SELECT email, extract(epoch from (now() - resetlinkcreated)) AS period FROM users WHERE resetlink=$1`, [resetLink]);
+    if (!user.rows.length) {
+      throw ApiError.BadRequest('Некорректная ссылка сброса пароля!');
+    }
+
+    // 2. Check if resetLink is fresh
+    if (~~+user.rows[0].period * 1000 > getPeriodByString(process.env.RESET_LINK_PERIOD)) {
+      throw ApiError.BadRequest('Срок действия ссылки сброса пароля истёк!');
+    }
+
+    // 3. Generate new password and hash
+    const password = generatePassword(8, false);
+    const hashPass = await bcrypt.hash(password, 3);
+
+    // 4. Add new password to DB
+    await (async function() {
+      try {
+        await db.query(`UPDATE users SET password=$1, resetlinkcreated=NULL, resetlink=NULL WHERE email=$2`, [hashPass, user.rows[0].email]);
+      } catch (e) {
+        throw ApiError.BadRequest(`Не удалось обновить данные пользователя ${user.rows[0].email} : ${e.message}`);
+      }      
+    }());
+
+    // 5. Send new password to user by email
+    await emailService.sendNewPasswordMail(user.rows[0].email, password);
+  }
+
   // --- LOGIN
   async activate(activationLink) {
     // 1. Search for user by actiovation link
@@ -50,7 +107,7 @@ class UserService {
       throw ApiError.BadRequest('Некорректная ссылка активации!');
     }
 
-    // 2. Update user col isActivated
+    // 2. Update user col isactivated
     await db.query(`UPDATE users SET isactivated=true WHERE email=$1`, [user.rows[0].email]);
   }
 

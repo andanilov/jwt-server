@@ -29,6 +29,41 @@ class MainService {
         `
     });
   }
+
+  async sendResetPasswordLinkMail(to, link, ip) {
+    await this.transporter.sendMail({
+      from: process.env.SMTP_USER,
+      to,
+      subject: `Запрос на сброс пароля ${process.env.PROJECT_NAME}`,
+      text: '',
+      html: 
+        `
+          <div>
+            <h1>${process.env.PROJECT_NAME}</h1>
+            <h2>Здравствуйте, с IP: ${ip} поступил запрос на сброс пароля.</h2>
+            <a href="${link}">Сбросить пароль!</a>
+          </div>
+        `
+    });
+  }
+
+  async sendNewPasswordMail(to, pswd) {
+    await this.transporter.sendMail({
+      from: process.env.SMTP_USER,
+      to,
+      subject: `Новый пароль ${process.env.PROJECT_NAME}`,
+      text: '',
+      html: 
+        `
+          <div>
+            <h1>${process.env.PROJECT_NAME}</h1>
+            <h2>Здравствуйте, Ваш пароль был изменён.</h2>
+            <h2>Новый пароль: ${pswd}</h2>
+            <p>Рекомендуем заменить данный пароль в Личном кабинете.</p>
+          </div>
+        `
+    });
+  }
 }
 
 module.exports = new MainService();

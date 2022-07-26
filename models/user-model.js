@@ -8,7 +8,10 @@ class UserModel {
         password VARCHAR(64) NOT NULL,
         name VARCHAR(64),
         isactivated BOOLEAN DEFAULT false,
-        activationLink VARCHAR(255)
+        created TIMESTAMP,
+        activationLink VARCHAR(255),
+        resetLink VARCHAR(255),
+        resetLinkCreated TIMESTAMP
       );`);      
       console.log('Таблица users создана!');
     } catch(e) {

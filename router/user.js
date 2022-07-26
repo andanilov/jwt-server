@@ -24,6 +24,15 @@ router.post('/login',
   userController.login
 );
 
+// -- Remember
+router.post('/remember', 
+  body('email').isLength({ max: 255 }),
+  userController.remember
+);
+
+// -- Reset user password by reset link 
+router.get('/reset/:link', userController.reset);
+
 // -- LogOut
 router.post('/logout', userController.logout);
 

@@ -11,10 +11,14 @@ const routerUser = require('./router/user');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// console.log('!!!', process.env.CLIENT_URL);
+
 // -- Middleware
 app.use(express.json()); // Read response as json
 app.use(cookieParser());
 app.use(cors({ // Server mode for browser
+  // withCredentials: true,
+  // credentials: 'include',
   credentials: true,
   origin: process.env.CLIENT_URL,
 })); 
