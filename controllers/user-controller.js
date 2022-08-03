@@ -3,6 +3,14 @@ const { validationResult } = require('express-validator');
 const ApiError = require('../exceptions/api-error');
 const getPeriodByString = require('../utils/getPeriodByString');
 
+// -- Check if middleware validation error exists
+const validateRequestData = (req) => {
+  const errors = validationResult(req);  
+  if (!errors.isEmpty()) {
+    throw ApiError.BadRequest(`Неверные данные!`, errors);
+  }
+}
+
 class UserController {
   // --- REGISTRATION
   async registration(req, res, next) {
@@ -151,17 +159,57 @@ class UserController {
       next(e); // go to middleware (error)
     }
   }
+
+  // --- Change User data
+  async changeData(req, res, next) {
+    try {
+      console.log('Here we will change user data!', req.body);
+
+      // 1. Check data
+      validateRequestData(req);
+
+      // 2. Get data from request
+      const { actor, user, password, name, newPassword, role } = req.body;      
+
+      // 3. If new password exists
+      await userService.changeUserData({ actor, user, password, name, newPassword, role });
+
+      // 4. Send response
+      return res.json();
+    } catch (e) {
+      console.log(e);
+      next(e); // go to middleware (error)
+    }
+  }
   
   // --- Try to get private date (all users)
   async getUsers(req, res, next) {
     try {
       const users = await userService.getAllUsers();
-      res.json(users);      
+      res.json(users);
     } catch (e) {
       next(e); // go to middleware (error)
     }
   }
+  
+  // --- Delete user
+  async deleteUser(req, res, next) {
+    try {
+      // 1. Get data from request
+      const [actor, userEmail] = [req?.user, req.body?.email];
 
+      // 2. Check data
+      if (!actor?.email || !actor?.access || !userEmail) {
+        throw ApiError.BadRequest(`Недостаточно данных!`, errors);
+      }
+
+      // 3. Try to delete user by service
+      await userService.deleteUser(actor.email, actor.access, userEmail);    
+      res.json({});
+    } catch (e) {
+      next(e); // go to middleware (error)
+    }
+  }
 }
 
 module.exports = new UserController();

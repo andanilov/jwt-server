@@ -1,6 +1,7 @@
 const db = require('../db');
 const bcrypt = require('bcrypt');
 const uuid = require('uuid');
+const sql = require('yesql').pg
 const generatePassword = require('password-generator');
 const emailService = require('./mail-service');
 const tokenService = require('./token-service');
@@ -19,7 +20,7 @@ class UserService {
     }
 
     // 2. Get hash for password
-    const hashPass = await bcrypt.hash(password, 3);
+    const hashPass = await this._getHashPass(password, 3);
 
     // 3. Get random string for actiovation
     const activationStr = uuid.v4();
@@ -28,8 +29,8 @@ class UserService {
     const user = await (async function() {
       try {
         const newUser = await db.query(`INSERT INTO users
-          (email, password, name, isactivated, created, activationlink)
-          VALUES ($1, $2, $3, $4, current_timestamp, $5) RETURNING *`,           
+          (email, password, name, isactivated, created, activationlink, access)
+          VALUES ($1, $2, $3, $4, current_timestamp, $5, 1) RETURNING *`,           
           [email, hashPass, name, false, activationStr]);
         return newUser;
       } catch (e) {
@@ -112,21 +113,57 @@ class UserService {
   }
 
   async login(email, password) {
-    // 1. Check if user exists
-    const user = await db.query(`SELECT * FROM users WHERE email=$1`, [email]);
-    if (!user.rows.length) {
-      throw ApiError.BadRequest(`Данный пользователь не найден или неверные реквизиты!`);
-    }
+    await this._getUser(email, password);
+    return await this._generateAndSaveTokens(email);
 
-    // 2. Check the password
-    const isPassright = await bcrypt.compare(password, user.rows[0].password);
-    if (!isPassright) {
-      throw ApiError.BadRequest(`Данный пользователь не найден или неверные реквизиты!`);
-    }
+    // 1. Check if user exists
+    // const user = await db.query(`SELECT * FROM users WHERE email=$1`, [email]);
+    // if (!user.rows.length) {
+    //   throw ApiError.BadRequest(`Данный пользователь не найден или неверные реквизиты!`);
+    // }
+
+    // // 2. Check the password
+    // const isPassright = await bcrypt.compare(password, user.rows[0].password);
+    // if (!isPassright) {
+    //   throw ApiError.BadRequest(`Данный пользователь не найден или неверные реквизиты!`);
+    // }
     
     // 3. Generate tokens and get user info
-    const tokensAndUser = await this._generateAndSaveTokens(email);
-    return tokensAndUser;   
+    // const tokensAndUser = await this._generateAndSaveTokens(email);
+    // return tokensAndUser;   
+  }
+
+  async changeUserData({ actor, user, password, name, newPassword, access }) {
+    // 1. Check actor email and password
+    const actorDb = await this._getUser(actor, password);
+
+    // 2. Check rights to change root or himself
+    if ((actor !== user) && (!actorDb.access || actorDb.access < process.env.ADMIN_ACCESS_NUM)) {
+      throw ApiError.BadRequest('Недостаточно прав для выполнения действия!');
+    }
+
+    // 3. Validate new password
+    if (newPassword && newPassword.trim().length < process.env.USER_PASSWORD_MIN_LEN) {
+      throw ApiError.BadRequest('Новый пароль невалидный!');
+    }
+
+    // 4. set updateArr
+    const updateArr = { name };
+    !access ?? (updateArr.access = access); 
+    newPassword && (updateArr.password = await this._getHashPass(newPassword));
+
+    // 5. Generate update params list from update arr
+    const updateParams = Object.keys(updateArr).reduce((strArr, key) =>
+      [...strArr, `${key}=:${key}`], []).join(', ');
+
+    // 6. Change user data
+    await (async function() {
+      try {
+        await db.query(sql(`UPDATE users SET ${updateParams} WHERE email=:user`)({user, ...updateArr}));
+      } catch (e) {
+        throw ApiError.BadRequest(`Не удалось обновить данные пользователя ${user} : ${e.message}`);
+      }      
+    }());
   }
 
   // --- LOGOUT
@@ -164,7 +201,7 @@ class UserService {
 
   // --- Get All users
   async getAllUsers() {
-    const users = await db.query(`SELECT * FROM users`);
+    const users = await db.query(`SELECT *, to_char(created, 'YYYY-MM-DD HH:MI:SS') AS created FROM users`);
     return users.rows;
   }
 
@@ -172,6 +209,18 @@ class UserService {
   async getUser(email) {
     const users = await db.query(`SELECT * FROM users WHERE email=$1`, [email]);
     return users.rows[0] ?? [];
+  }
+
+  // --- Delete user
+  async deleteUser(actorEmail, actorAccess, email) {
+    // 1. Check access
+    if (actorEmail !== email && actorAccess < process.env.ADMIN_ACCESS_NUM) {
+      throw ApiError.BadRequest('Недостаточно прав для удаления пользователя!');
+    }
+
+    // 1. Delete user if exists
+    await db.query(`DELETE FROM users WHERE email=$1`, [email]);
+    await db.query(`DELETE FROM token WHERE email=$1;`, [email]);
   }
 
   // --- Get user info, generate tokens, save tokens, return tokens and user info
@@ -188,6 +237,27 @@ class UserService {
 
     // 4. Return tokens and userDto
     return { accessToken, refreshToken, user: userDto };    
+  }
+
+  // --- Check user and his password
+  async _getUser(email, password) {
+    // 1. Check if user exists
+    const user = await db.query(`SELECT * FROM users WHERE email=$1`, [email]);
+    if (!user.rows.length) {
+      throw ApiError.BadRequest(`Данный пользователь не найден или неверные реквизиты!`);
+    }
+
+    // 2. Check the password
+    const isPassright = await bcrypt.compare(password, user.rows[0].password);
+    if (!isPassright) {
+      throw ApiError.BadRequest(`Данный пользователь не найден или неверные реквизиты!`);
+    }
+
+    return user.rows[0];
+  }
+
+  async _getHashPass(password) {
+    return await bcrypt.hash(password, 3);
   }
 
 }

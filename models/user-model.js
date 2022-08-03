@@ -11,7 +11,8 @@ class UserModel {
         created TIMESTAMP,
         activationLink VARCHAR(255),
         resetLink VARCHAR(255),
-        resetLinkCreated TIMESTAMP
+        resetLinkCreated TIMESTAMP,
+        access SMALLINT NULL
       );`);      
       console.log('Таблица users создана!');
     } catch(e) {
