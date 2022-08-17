@@ -5,6 +5,7 @@ const model = new Model();
 const tables = [
   require('../models/user-model'),
   require('../models/token-model'),
+  require('../models/pdf-model'),
 ];
 
 /* Create DB struct */

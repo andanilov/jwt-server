@@ -30,7 +30,7 @@ class UserService {
       try {
         const newUser = await db.query(`INSERT INTO users
           (email, password, name, isactivated, created, activationlink, access)
-          VALUES ($1, $2, $3, $4, current_timestamp, $5, 1) RETURNING *`,           
+          VALUES ($1, $2, $3, $4, current_timestamp, $5, 0) RETURNING *`,           
           [email, hashPass, name, false, activationStr]);
         return newUser;
       } catch (e) {
@@ -114,32 +114,21 @@ class UserService {
 
   async login(email, password) {
     await this._getUser(email, password);
-    return await this._generateAndSaveTokens(email);
-
-    // 1. Check if user exists
-    // const user = await db.query(`SELECT * FROM users WHERE email=$1`, [email]);
-    // if (!user.rows.length) {
-    //   throw ApiError.BadRequest(`Данный пользователь не найден или неверные реквизиты!`);
-    // }
-
-    // // 2. Check the password
-    // const isPassright = await bcrypt.compare(password, user.rows[0].password);
-    // if (!isPassright) {
-    //   throw ApiError.BadRequest(`Данный пользователь не найден или неверные реквизиты!`);
-    // }
-    
-    // 3. Generate tokens and get user info
-    // const tokensAndUser = await this._generateAndSaveTokens(email);
-    // return tokensAndUser;   
+    return await this._generateAndSaveTokens(email); 
   }
 
   async changeUserData({ actor, user, password, name, newPassword, access }) {
-    // 1. Check actor email and password
-    const actorDb = await this._getUser(actor, password);
+    // 1. User changing himself
+    if (actor === user) {
+      const actorDb = await this._getUser(user, password);
 
-    // 2. Check rights to change root or himself
-    if ((actor !== user) && (!actorDb.access || actorDb.access < process.env.ADMIN_ACCESS_NUM)) {
-      throw ApiError.BadRequest('Недостаточно прав для выполнения действия!');
+    // 2. Actor changing a user  
+    } else {
+      const actorDb = await this.getUser(actor);
+
+      if (!actorDb.access || actorDb.access < process.env.ADMIN_ACCESS_NUM) {
+        throw ApiError.BadRequest('Недостаточно прав для выполнения действия!');
+      }
     }
 
     // 3. Validate new password
@@ -148,8 +137,11 @@ class UserService {
     }
 
     // 4. set updateArr
-    const updateArr = { name };
-    !access ?? (updateArr.access = access); 
+    const updateArr = {};
+    name !== undefined && (updateArr.name = name);
+    access !== undefined && (updateArr.access = (access >= process.env.ADMIN_ACCESS_NUM)
+      ? process.env.ADMIN_ACCESS_NUM - 1
+      : access);
     newPassword && (updateArr.password = await this._getHashPass(newPassword));
 
     // 5. Generate update params list from update arr
@@ -161,7 +153,7 @@ class UserService {
       try {
         await db.query(sql(`UPDATE users SET ${updateParams} WHERE email=:user`)({user, ...updateArr}));
       } catch (e) {
-        throw ApiError.BadRequest(`Не удалось обновить данные пользователя ${user} : ${e.message}`);
+        throw ApiError.BadRequest(`Не удалось обновить данные пользователя ${user} : ${e.message ?? ''}`);
       }      
     }());
   }
@@ -210,6 +202,12 @@ class UserService {
     const users = await db.query(`SELECT * FROM users WHERE email=$1`, [email]);
     return users.rows[0] ?? [];
   }
+
+  // --- Is the user an admin
+  // async isAdmin(email) {
+  //   const access = await this.getUser(email).access;
+  //   return access >= process.env.ADMIN_ACCESS_NUM;
+  // }
 
   // --- Delete user
   async deleteUser(actorEmail, actorAccess, email) {

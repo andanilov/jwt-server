@@ -39,10 +39,11 @@ router.post('/logout', userController.logout);
 // -- Refresh token
 router.get('/refresh', userController.refresh);
 
-router.post('/changeData', 
+router.post('/changeData',
+  authMiddleware,
   body('actor').isEmail(),
   body('user').isEmail(),
-  body('password').isLength({ min: process.env.USER_PASSWORD_MIN_LEN, max: 255 }),
+  // body('password').isLength({ min: process.env.USER_PASSWORD_MIN_LEN, max: 255 }),
   userController.changeData,
 );
 

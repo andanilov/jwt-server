@@ -169,10 +169,10 @@ class UserController {
       validateRequestData(req);
 
       // 2. Get data from request
-      const { actor, user, password, name, newPassword, role } = req.body;      
+      const { actor, user, password, name, newPassword, access } = req.body;      
 
       // 3. If new password exists
-      await userService.changeUserData({ actor, user, password, name, newPassword, role });
+      await userService.changeUserData({ actor, user, password, name, newPassword, access });
 
       // 4. Send response
       return res.json();
